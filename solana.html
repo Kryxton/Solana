@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Wallet Scanner for the Book</title>
+  <!-- Google Fonts for a modern look -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+  <!-- Include required libraries from CDNs -->
+  <script src="https://unpkg.com/bip39/dist/index.min.js"></script>
+  <script src="https://unpkg.com/ed25519-hd-key/dist/index.min.js"></script>
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <style>
+    /* Cool, modern dark theme */
+    body {
+      background-color: #121212;
+      color: #e0e0e0;
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      padding: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1, h2 {
+      text-align: center;
+      margin-top: 20px;
+    }
+    #controls {
+      text-align: center;
+      margin: 20px;
+    }
+    button {
+      background: #6200ea;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #7f39fb;
+    }
+    #current {
+      text-align: center;
+      margin: 20px;
+      font-size: 14px;
+      word-wrap: break-word;
+    }
+    #wallets {
+      margin: 20px auto;
+    }
+    .walletEntry {
+      background: #1e1e1e;
+      padding: 10px;
+      margin: 5px;
+      border-radius: 5px;
+      word-wrap: break-word;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Wallet Scanner for the Book</h1>
+    <div id="controls">
+      <button id="startBtn">Start Scanning</button>
+      <button id="stopBtn" disabled>Stop Scanning</button>
+    </div>
+    <div id="current">Current attempt will appear here...</div>
+    <h2>Found Wallets</h2>
+    <div id="wallets"></div>
+  </div>
+  
+  <script>
+    // Create a connection to the Solana devnet (for demo purposes)
+    const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('devnet'));
+    
+    let scanning = false;
+    
+    // This function generates a random 12-word mnemonic,
+    // derives a wallet keypair using the Solana derivation path,
+    // and then checks its SOL balance.
+    async function scanWallets() {
+      try {
+        // Generate a random mnemonic (defaults to 12 words)
+        const mnemonic = bip39.generateMnemonic();
+        // Derive seed from mnemonic (synchronously for demo)
+        const seed = bip39.mnemonicToSeedSync(mnemonic);
+        const derivationPath = "m/44'/501'/0'/0'";
+        const derived = ed25519HDKey.derivePath(derivationPath, seed.toString("hex"));
+        // Create a Solana keypair from the first 32 bytes of the derived key
+        const keypair = solanaWeb3.Keypair.fromSeed(derived.key.slice(0, 32));
+        const publicKey = keypair.publicKey;
+  
+        // Update the current attempt display
+        const currentDisplay = document.getElementById("current");
+        currentDisplay.innerText = `Testing: ${mnemonic} | ${publicKey.toBase58()}`;
+  
+        // Log to console for debugging
+        console.log("Attempt:", mnemonic, publicKey.toBase58());
+  
+        // Check the SOL balance (in lamports)
+        const balance = await connection.getBalance(publicKey);
+  
+        // For debugging: log the balance result
+        console.log("Balance:", balance);
+  
+        // If the balance is greater than 0, record the wallet info
+        if (balance > 0) {
+          const walletsDiv = document.getElementById("wallets");
+          const walletEntry = document.createElement("div");
+          walletEntry.className = "walletEntry";
+          walletEntry.innerHTML = `<strong>Mnemonic:</strong> ${mnemonic}<br>
+                                   <strong>Public Key:</strong> ${publicKey.toBase58()}<br>
+                                   <strong>Balance:</strong> ${balance} lamports`;
+          walletsDiv.prepend(walletEntry);
+        }
+      } catch (err) {
+        console.error("Error during scanWallets:", err);
+        document.getElementById("current").innerText = "Error occurred, check console.";
+      }
+    }
+    
+    // The scanning loop continuously generates and checks mnemonic phrases.
+    async function scanLoop() {
+      while (scanning) {
+        await scanWallets();
+        // A small delay to allow UI updates and avoid overwhelming the network
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    // Event listeners to start and stop the scanning process.
+    document.getElementById("startBtn").addEventListener("click", () => {
+      scanning = true;
+      document.getElementById("startBtn").disabled = true;
+      document.getElementById("stopBtn").disabled = false;
+      scanLoop();
+    });
+    
+    document.getElementById("stopBtn").addEventListener("click", () => {
+      scanning = false;
+      document.getElementById("startBtn").disabled = false;
+      document.getElementById("stopBtn").disabled = true;
+    });
+  </script>
+</body>
+</html>
